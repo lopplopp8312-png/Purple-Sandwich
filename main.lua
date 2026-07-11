@@ -1,14 +1,14 @@
 function love.load()
+    debug = true
     wasd = "w"
     timer = 0
     local width, height = love.window.getDesktopDimensions()
     local width, height = width*0.8, height*0.8
     screenscale = math.max(width / 1280, height/ 720)
     love.window.setMode(width, height, {resizable = true, centered = true, highdpi = true, vsync = 0}) 
-    love.window.setTitle("gam")
+    love.window.setTitle("Purple Error")
 
     grass = love.graphics.newImage("grass.png")
-    grass:setWrap("repeat", "repeat")
 
     screen = {}
 
@@ -25,50 +25,19 @@ function love.load()
         }
     }
 
-    local xscale, yscale, zscale = 2, 3, 4
-
-    local xscale2, yscale2, zscale2 = (xscale - 1) * 50, (yscale - 1) * 50, (zscale - 1) * 100
-
-    local topx, topy                 = 0 + 2*xscale2 - 2*yscale2, -100 - xscale2 - yscale2
-    local toprightx, toprighty       = 100 + 2*xscale2, -50 - xscale2
-    local bottomrightx, bottomrighty = 100 + 2*xscale2, 50 - xscale2 + zscale2
-    local bottomx, bottomy           = 0, 100 + zscale2
-    local bottomleftx, bottomlefty   = -100 - 2*yscale2, 50 + zscale2 - yscale2
-    local topleftx, toplefty         = -100 - 2*yscale2, -50 - yscale2
-
-    local cube = {
-        -- top (x, y, u, v, r, g, b)
-        {topleftx, toplefty, 0, xscale},
-        {topx, topy, 0, 0},
-        {toprightx, toprighty, yscale, 0},
-
-        {toprightx, toprighty, yscale, 0},
-        {0, 0, yscale, xscale},
-        {topleftx, toplefty, 0, xscale},
-
-        -- left
-        {topleftx, toplefty, 0, 0, 0.8, 0.8, 0.8},
-        {bottomleftx, bottomlefty, 0, zscale, 0.8, 0.8, 0.8},
-        {bottomx, bottomy, yscale, zscale, 0.8, 0.8, 0.8},
-        
-        {bottomx, bottomy, yscale, zscale, 0.8, 0.8, 0.8},
-        {0, 0, yscale, 0, 0.8, 0.8, 0.8},
-        {topleftx, toplefty, 0, 0, 0.8, 0.8, 0.8},
-
-        -- right
-        {toprightx, toprighty, xscale, 0, 0.4, 0.4, 0.4},
-        {bottomrightx, bottomrighty, xscale, zscale, 0.4, 0.4, 0.4},
-        {bottomx, bottomy, 0, zscale, 0.4, 0.4, 0.4},
-
-        {bottomx, bottomy, 0, zscale, 0.4, 0.4, 0.4},
-        {0, 0, 0, 0, 0.4, 0.4, 0.4},
-        {toprightx, toprighty, xscale, 0, 0.4, 0.4, 0.4},
+    -- disgusting level data
+    leveldata = {
+        GrassLands = {
+            sky = "cat.jfif",
+        },
     }
 
-    cubemesh = love.graphics.newMesh(cube, "triangles", "static")
+    loadlevel("GrassLands")
+end
 
-    cubemesh:setTexture(grass)
-
+function loadlevel(level)
+    local data = leveldata[level]
+    sky = data["sky"]
 end
 
 function love.keypressed(key)
@@ -130,37 +99,54 @@ function love.draw()
     local test1, test2 = 640, 280
 
     -- debug
-     debugvalues = {
-        "fps: " .. fps,
-        "timer: " .. timer,
-        "screenscale: " .. screenscale,
-        "wasd : " .. wasd,
-        "posx: " .. player.pos.x
-    }
-    for index,value in ipairs(debugvalues) do
-         love.graphics.print(value, 20, index * 20)
+    if debug then
+        debugvalues = {
+           "fps: " .. fps,
+            "timer: " .. timer,
+            "screenscale: " .. screenscale,
+            "wasd : " .. wasd,
+            "posx: " .. player.pos.x,
+            "posy: " .. player.pos.y,
+            "posz: " .. player.pos.z,      
+            "sky: " .. sky,
+        }
+        for index,value in ipairs(debugvalues) do
+            love.graphics.print(value, 20, index * 20)
+        end
     end
 
     local x, y = test1, test2
     local scale = 1
 
+    -- world stuff here
     love.graphics.push()
 
     love.graphics.scale(screenscale, screenscale)
     love.graphics.translate(screen.x, screen.y)
 
-    love.graphics.draw(cubemesh, x, y, 0, scale, scale)
+
 
     love.graphics.pop()
+
+    -- UI stuff here
+    love.graphics.push()
+
+    love.graphics.scale(screenscale, screenscale)
+
+    love.graphics.setColor(1,1,1,0.5)
+    love.graphics.print("pre-alpha stage, everything sucks and\n     everything you see will change", 280, 50, 0, 3, 3)
+    love.graphics.setColor(1,1,1,1)
 
     if aspecttruthness then
         love.graphics.setColor(1,0,1)
         love.graphics.print(
-            "ASPECT RATIO IS NOT 16:9\nVISUALS MIGHT BREAK\npress escape for full screen\npress backspace to ignore"
+            "ASPECT RATIO IS NOT 16:9\nVISUALS WILL BREAK\npress escape for full screen\npress backspace to ignore"
             , 50, 100, 0, 3, 3)
         love.graphics.setColor(1,1,1)
         if love.keyboard.isDown("backspace") then
             aspecttruthness = false
         end 
     end
+
+    love.graphics.pop()
 end
