@@ -47,13 +47,21 @@ function love.load()
         test2 = {
             {"testbro","success"},
             {"testbro","multiselection test"},
-            {"quiz host","[insert quiz here]","\n\n← cat","\n\n→ car","1"},
-            {"testbro","test completed"},
-            {"testbro","bye forever"},
-            {"return"}
+            {"quiz host","[insert quiz here]","\n\n← cat","\n\n→ car","4"},
+            {"testbro","you chose cat..\nvery wise choice"},
+            {"testbro","ok bye forever"},
+            {"return"},
+            {"testbro","you chose car..\nvroom vroom 🚗🚗🚗"},
+            {"testbro","ok bye forever"},
+            {"return"},
         }
     }
     
+    dialoguecolor = {
+        "testguy", {0,1,1},
+        "testbro", {1,0,1},
+        "quiz host", {1,1,0},
+    }
     
     leveldata = {
         GrassLands = {
@@ -93,13 +101,23 @@ function nextdialogue(choice2)
     end
 
     local data = dialogue.data[dialogue.count]
+
+    local guy = data[1]
+    for i = 1, #dialoguecolor, 2 do
+        if guy == dialoguecolor[i] then
+            dialogue.color = dialoguecolor[i+1]
+        else
+            dialogue.color = {1,0,1}
+        end
+    end
+
     if #data == 1 then
-        if data [1] == "return" then
+        if guy == "return" then
             gamestate.dialogue = false
             return
         end
 
-        loaddialogue(data[1])
+        loaddialogue(guy)
         return
     end
 
@@ -220,7 +238,10 @@ function love.draw()
 
     -- dialogue
     if gamestate.dialogue then
+        love.graphics.setColor(dialogue.color)
         love.graphics.draw(dialogue.box, 338, 480,0,1.5,1.5)
+        love.graphics.setColor(1,1,1)
+
         love.graphics.draw(dialogue.guy, 380, 420,0,1,1)
         love.graphics.draw(dialogue.text, 380, 510,0,1,1)
         love.graphics.draw(dialogue.choice1, 380, 510,0,1,1)
