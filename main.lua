@@ -1,5 +1,5 @@
 local savetable = require("lib.tablesave")
-
+local floor = math.floor
 
 
 
@@ -17,7 +17,7 @@ function love.load()
     rvar = {}
 
     screen = {}
-    gamestate = {dialogue = false}
+    gamestate = {}
     render = {}
     dialogue = {}
 
@@ -47,13 +47,12 @@ function love.load()
         test2 = {
             {"testbro","success"},
             {"testbro","multiselection test"},
-            {"quiz host","[insert quiz here]","\n\n← cat","\n\n→ car","4"},
-            {"testbro","you chose cat..\nvery wise choice"},
+            {"quiz host","[insert quiz here]","\n\n← cat","\n→ restart\nconversation","4"},
+            {"testbro","you chose cat"},
             {"testbro","ok bye forever"},
             {"return"},
-            {"testbro","you chose car..\nvroom vroom 🚗🚗🚗"},
-            {"testbro","ok bye forever"},
-            {"return"},
+            {"quiz host","ok"},
+            {"test2"},
         }
     }
     
@@ -93,6 +92,8 @@ end
 function nextdialogue(choice2)
     gamestate.choice = false
     local black = {0,0,0}
+    dialogue.color = {1,1,1}
+    rvar.color = false
 
     if choice2 then
         dialogue.count = dialogue.count + dialogue.data[dialogue.count][5]
@@ -106,8 +107,7 @@ function nextdialogue(choice2)
     for i = 1, #dialoguecolor, 2 do
         if guy == dialoguecolor[i] then
             dialogue.color = dialoguecolor[i+1]
-        else
-            dialogue.color = {1,0,1}
+            rvar.color = true
         end
     end
 
@@ -119,10 +119,16 @@ function nextdialogue(choice2)
 
         loaddialogue(guy)
         return
+    elseif #data == 2 then
+        dialogue.textupdate = true
+        dialogue.shown = 0
+        dialogue.text = love.graphics.newText(font, {black, ""})
+        dialogue.texttext = data[2]
+    else
+        dialogue.text = love.graphics.newText(font, {black, data[2]})
     end
 
     dialogue.guy = love.graphics.newText(font, {black, data[1]})
-    dialogue.text = love.graphics.newText(font, {black, data[2]})
     dialogue.choice1 = love.graphics.newText(font, {black, data[3]})
     dialogue.choice2 = love.graphics.newText(font, {black, data[4]})
 
@@ -169,7 +175,7 @@ function love.keypressed(key)
             elseif keys("right") then
                 nextdialogue(true)
             end
-        elseif keys("e") then
+        elseif keys("e") and not dialogue.textupdate then
             nextdialogue()
         end
     end
@@ -187,6 +193,7 @@ function love.update(dt)
     fps = math.floor(1 / dt)
     timer = timer + dt
 
+    -- player
     if love.keyboard.isDown(wasd) then
         if wasd == "w" or wasd == "up" then
             player.vel.x = 2
@@ -211,6 +218,19 @@ function love.update(dt)
 
     screen.x = player.pos.x * -100 + player.pos.y * 100
     screen.y = player.pos.x * 50 + player.pos.y * 50
+
+    -- dialogue
+    if dialogue.textupdate then
+        dialogue.shown = dialogue.shown + 60 * dt
+        local text = dialogue.texttext
+        text = text:sub(1, floor(dialogue.shown))
+        
+        if floor(dialogue.shown) > #text then
+            dialogue.textupdate = false
+        else
+            dialogue.text:set({{0,0,0}, text})
+        end
+    end
 end
 
 function love.draw()
@@ -258,6 +278,8 @@ function love.draw()
             "posx: " .. player.pos.x,
             "posy: " .. player.pos.y,
             "posz: " .. player.pos.z,
+            "test: " .. tostring(dialogue.shown),
+            "test: " .. tostring(dialogue.textupdate),
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
