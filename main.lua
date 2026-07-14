@@ -13,6 +13,10 @@ function love.load()
     love.window.setMode(width, height, {resizable = true, centered = true, highdpi = true, vsync = 0}) 
     love.window.setTitle("Purple Error")
     font = love.graphics.newFont("asset/BuilderSans-Medium-500.ttf", 40, "normal", 20)
+    placeholdermusic = love.audio.newSource("asset/Robot 32 OST - Needed Rest.ogg", "stream")
+    placeholdermusic:setLooping(true)
+    placeholdermusic:play()
+
     -- random variable table for confusing names
     rvar = {}
 
@@ -166,6 +170,14 @@ function love.keypressed(key)
 
     if keys("p") then
         loaddialogue("test")
+    end
+
+    if keys("m") then
+        if placeholdermusic:isPlaying() then
+            placeholdermusic:stop()
+        else
+            placeholdermusic:play()
+        end
     end
 
     if gamestate.dialogue then
