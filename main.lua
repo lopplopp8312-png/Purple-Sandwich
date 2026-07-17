@@ -13,9 +13,38 @@ function love.load()
     love.window.setMode(width, height, {resizable = true, centered = true, highdpi = true, vsync = 0}) 
     love.window.setTitle("Purple Error")
     font = love.graphics.newFont("asset/BuilderSans-Medium-500.ttf", 40, "normal", 20)
-    placeholdermusic = love.audio.newSource("asset/Robot 32 OST - Needed Rest.ogg", "stream")
+    placeholdermusic = love.audio.newSource("asset/Purple Sandwich.ogg", "stream")
     placeholdermusic:setLooping(true)
     placeholdermusic:play()
+
+    -- test
+    grass = love.graphics.newImage("asset/grass2.png")
+
+    local function makerhombus(x,y)
+        local rhombus = love.math.newTransform()
+        local px, py = grass:getDimensions()
+        px, py = 200 / px, 200 / py
+        rhombus:scale(px,py)
+        rhombus:translate(150,0)
+        rhombus:scale(2, 1)
+        rhombus:rotate(0.7853)
+        rhombus:translate(400+x*100,y*100)
+        rhombus:scale(0.5,0.5)
+        return rhombus
+    end
+
+    batch = love.graphics.newSpriteBatch(grass, 100)
+
+    for i=-3, 3 do
+        for j=-3, 3 do
+            batch:add(makerhombus(i,j))
+        end
+    end
+
+    playerdata = table.load("player data.lua")
+    if not playerdata then
+        -- initialise save file
+    end
 
     -- random variable table for confusing names
     rvar = {}
@@ -75,6 +104,12 @@ function love.load()
 
     table.save(leveldata, "level data.lua")
     loadlevel("GrassLands")
+end
+
+function love.quit()
+    playerdata.timeplayed = playerdata.timeplayed + timer
+    playerdata.timesopened = playerdata.timesopened + 1
+    table.save(playerdata, "player data.lua")
 end
 
 function loadlevel(level)
@@ -252,6 +287,8 @@ function love.draw()
     love.graphics.scale(screenscale, screenscale)
     love.graphics.translate(screen.x, screen.y)
 
+    love.graphics.draw(batch)
+
 
 
     love.graphics.pop()
@@ -262,7 +299,7 @@ function love.draw()
     love.graphics.scale(screenscale, screenscale)
 
     -- draw sky
-    love.graphics.draw(render.sky, 0, 0, 0, rvar.w, rvar.h)
+    -- love.graphics.draw(render.sky, 0, 0, 0, rvar.w, rvar.h)
 
     love.graphics.setColor(1,1,1,0.5)
     love.graphics.print("pre-alpha stage, everything sucks and\n     everything you see will change", 280, 50, 0, 3, 3)
@@ -290,8 +327,10 @@ function love.draw()
             "posx: " .. player.pos.x,
             "posy: " .. player.pos.y,
             "posz: " .. player.pos.z,
-            "test: " .. tostring(dialogue.shown),
-            "test: " .. tostring(dialogue.textupdate),
+            "test: " .. 1,
+            "test: " .. 1,
+            "testdata: " .. playerdata.timesopened,
+            "testdata: " .. playerdata.timeplayed,
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
