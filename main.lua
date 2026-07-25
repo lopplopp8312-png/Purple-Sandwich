@@ -17,30 +17,6 @@ function love.load()
     placeholdermusic:setLooping(true)
     placeholdermusic:play()
 
-    -- test
-    grass = love.graphics.newImage("asset/grass2.png")
-
-    local function makerhombus(x,y)
-        local rhombus = love.math.newTransform()
-        local px, py = grass:getDimensions()
-        px, py = 200 / px, 200 / py
-        rhombus:scale(px,py)
-        rhombus:translate(150,0)
-        rhombus:scale(2, 1)
-        rhombus:rotate(0.7853)
-        rhombus:translate(400+x*100,y*100)
-        rhombus:scale(0.5,0.5)
-        return rhombus
-    end
-
-    batch = love.graphics.newSpriteBatch(grass, 100)
-
-    for i=-3, 3 do
-        for j=-3, 3 do
-            batch:add(makerhombus(i,j))
-        end
-    end
-
     playerdata = table.load("player data.lua")
     if not playerdata then
         -- initialise save file
@@ -98,7 +74,16 @@ function love.load()
     leveldata = {
         GrassLands = {
             sky = "grass.png",
-
+            -- cuboids
+            objects = {
+                -- texture name, xyz, scale xyz
+                {
+                "squ.png", 0, 1, 0, 2, 1, 1
+                },
+                {
+                "grass3.png", 0, 0, -1, 2, 1, 1
+                },
+            },
         },
     }
 
@@ -113,11 +98,74 @@ function love.quit()
 end
 
 function loadlevel(level)
+    levelgraphics = {}
     local data = leveldata[level]
+    local objects = data.objects
     local sky = data.sky
     render.sky = love.graphics.newImage("asset/" .. sky)
     rvar.w, rvar.h = render.sky:getDimensions()
     rvar.w, rvar.h = 1/rvar.w * 1280, 1/rvar.h * 720
+
+    for index = 1, #objects do
+        local stuff = objects[index]
+        local texture, x, y, z, sx, sy, sz =
+        stuff[1], stuff[2],stuff[3],stuff[4],stuff[5],stuff[6],stuff[7]
+
+        local function makeleftwall(x,y,z)
+            local leftwall = love.math.newTransform()
+            leftwall:translate(35,106)
+            leftwall:shear(0,0.5)
+            leftwall:translate(y*150+280,-z*150)
+            leftwall:translate(x*150,x*-150)
+            return leftwall
+        end
+
+        local function makerightwall(x,y,z)
+            local rightwall = love.math.newTransform()
+            rightwall:translate(634,412)
+            rightwall:shear(0,-0.5)
+            rightwall:translate(-x*150-20,z*150)
+            rightwall:translate(y*-150,y*-150)
+            return rightwall
+        end
+
+        local function makerhombus(x,y,z)
+            local rhombus = love.math.newTransform()
+            rhombus:translate(640,260)
+            rhombus:scale(0.7071, 0.7071)
+            rhombus:scale(2, 1)
+            rhombus:rotate(0.7853)
+            rhombus:translate(y*150,x*150)
+            rhombus:translate(-z*150,-z*150)
+        return rhombus
+        end
+
+        texture = love.graphics.newImage("asset/" .. texture)
+        local object = love.graphics.newSpriteBatch(texture, 100)
+
+        for i=x, x+sx-1 do
+            for j=y, y+sy-1 do
+                object:add(makerhombus(-i,-j,z))
+            end
+        end
+
+        object:setColor(0.8,0.8,0.8)
+        for i=y-1, y+sy-2 do
+            for j=z, z-sz+1, -1 do
+                object:add(makeleftwall(x,-i,j))
+            end
+        end
+    
+
+        object:setColor(0.4,0.4,0.4)
+        for i=x, x+sx-1 do
+            for j=-z, sz-z-1 do
+                object:add(makerightwall(-i,y,j))
+            end
+        end
+
+        levelgraphics[index] = object
+    end
 end
 
 function loaddialogue(id)
@@ -243,17 +291,17 @@ function love.update(dt)
     -- player
     if love.keyboard.isDown(wasd) then
         if wasd == "w" or wasd == "up" then
-            player.vel.x = 2
+            player.vel.x = 1.5
             player.vel.y = 0
         elseif wasd == "a" or wasd == "left" then
             player.vel.x = 0
-            player.vel.y = 2
+            player.vel.y = 1.5
         elseif wasd == "s" or wasd == "down" then
-            player.vel.x = -2
+            player.vel.x = -1.5
             player.vel.y = 0
         else
             player.vel.x = 0
-            player.vel.y = -2
+            player.vel.y = -1.5
         end
     else
         player.vel.x = 0
@@ -263,8 +311,8 @@ function love.update(dt)
     player.pos.x = player.pos.x + player.vel.x * dt
     player.pos.y = player.pos.y + player.vel.y * dt
 
-    screen.x = player.pos.x * -100 + player.pos.y * 100
-    screen.y = player.pos.x * 50 + player.pos.y * 50
+    screen.x = player.pos.x * -150 + player.pos.y * 150
+    screen.y = player.pos.x * 75 + player.pos.y * 75
 
     -- dialogue
     if dialogue.textupdate then
@@ -287,9 +335,9 @@ function love.draw()
     love.graphics.scale(screenscale, screenscale)
     love.graphics.translate(screen.x, screen.y)
 
-    love.graphics.draw(batch)
-
-
+    for i=1, #levelgraphics do
+        love.graphics.draw(levelgraphics[i])
+    end
 
     love.graphics.pop()
 
@@ -319,6 +367,8 @@ function love.draw()
 
      -- debug
     if debug then
+        local x, y = love.mouse.getPosition()
+        x, y = floor(x/screenscale), floor(y/screenscale)
         debugvalues = {
            "fps: " .. fps,
             "timer: " .. timer,
@@ -329,8 +379,8 @@ function love.draw()
             "posz: " .. player.pos.z,
             "test: " .. 1,
             "test: " .. 1,
-            "testdata: " .. playerdata.timesopened,
-            "testdata: " .. playerdata.timeplayed,
+            "testdata: " .. x,
+            "testdata: " .. y,
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
