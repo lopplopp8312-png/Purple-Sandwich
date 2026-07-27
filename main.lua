@@ -1,6 +1,8 @@
 local savetable = require("lib.tablesave")
 local floor = math.floor
 
+-- goodluck to whoever reading this
+
 
 
 function love.load()
@@ -14,12 +16,17 @@ function love.load()
     love.window.setTitle("Purple Error")
     font = love.graphics.newFont("asset/BuilderSans-Medium-500.ttf", 40, "normal", 20)
     placeholdermusic = love.audio.newSource("asset/Purple Sandwich.ogg", "stream")
+    myguy = love.graphics.newImage("asset/myguy.png")
     placeholdermusic:setLooping(true)
     placeholdermusic:play()
 
     playerdata = table.load("player data.lua")
     if not playerdata then
         -- initialise save file
+        playerdata = {
+            timeplayed = 0,
+            timesopened = 0,
+        }
     end
 
     -- random variable table for confusing names
@@ -78,10 +85,13 @@ function love.load()
             objects = {
                 -- texture name, xyz, scale xyz
                 {
+                "grass3.png", -5, -5, -2, 10, 10, 1
+                },
+                {
                 "squ.png", 0, 1, 0, 2, 1, 1
                 },
                 {
-                "grass3.png", 0, 0, -1, 2, 1, 1
+                "grass3.png", 0, 0, -1, 1, 1, 1
                 },
             },
         },
@@ -97,11 +107,37 @@ function love.quit()
     table.save(playerdata, "player data.lua")
 end
 
+function detectground(x,y,z)
+    local objects = ldata.objects
+    gamestate.onground = false
+
+    local function detect(object)
+        if object[4] - object[7] <= z - 1 and z - 1 <= object[4]
+        and object[2] < x + 0.75 and x + 0.25 < object[2] + object[5]
+        and object[3] < y + 0.75 and y + 0.25 < object[3] + object[6] then
+            return true
+        else
+            return false
+        end
+    end
+
+    -- ground detection
+
+    for i = 1, #objects do
+        local object = objects[i]
+        if detect(object) then
+            gamestate.onground = true
+            return object[4] + 1
+        end
+    end
+    return false
+end
+
 function loadlevel(level)
     levelgraphics = {}
-    local data = leveldata[level]
-    local objects = data.objects
-    local sky = data.sky
+    ldata = leveldata[level]
+    local objects = ldata.objects
+    local sky = ldata.sky
     render.sky = love.graphics.newImage("asset/" .. sky)
     rvar.w, rvar.h = render.sky:getDimensions()
     rvar.w, rvar.h = 1/rvar.w * 1280, 1/rvar.h * 720
@@ -242,6 +278,11 @@ function love.keypressed(key)
         wasd = key
     end
 
+    if keys("space") then
+        gamestate.space = true
+    end
+        
+
     if keys("escape") then
         local isfullscreen = not love.window.getFullscreen()
         love.window.setFullscreen(isfullscreen, "desktop")
@@ -310,9 +351,10 @@ function love.update(dt)
 
     player.pos.x = player.pos.x + player.vel.x * dt
     player.pos.y = player.pos.y + player.vel.y * dt
+    player.pos.z = player.pos.z + player.vel.z * dt
 
     screen.x = player.pos.x * -150 + player.pos.y * 150
-    screen.y = player.pos.x * 75 + player.pos.y * 75
+    screen.y = player.pos.x * 75 + player.pos.y * 75 + player.pos.z * 150
 
     -- dialogue
     if dialogue.textupdate then
@@ -326,6 +368,19 @@ function love.update(dt)
             dialogue.text:set({{0,0,0}, text})
         end
     end
+
+    -- floor
+    local ground = detectground(player.pos.x,player.pos.y,player.pos.z)
+    if ground then
+        player.pos.z = ground
+        player.vel.z = 0
+        if gamestate.space then
+            gamestate.space = false
+            player.vel.z = 4.5
+        end
+    else
+        player.vel.z = player.vel.z - 9 * dt
+    end
 end
 
 function love.draw()
@@ -333,11 +388,23 @@ function love.draw()
     love.graphics.push()
 
     love.graphics.scale(screenscale, screenscale)
+    love.graphics.scale(0.8)
     love.graphics.translate(screen.x, screen.y)
+    love.graphics.translate(141,-13)
 
     for i=1, #levelgraphics do
         love.graphics.draw(levelgraphics[i])
     end
+
+    love.graphics.pop()
+
+    love.graphics.push()
+
+    love.graphics.scale(screenscale, screenscale)
+    love.graphics.scale(0.8)
+
+    -- guy
+    love.graphics.draw(myguy,706,309)
 
     love.graphics.pop()
 
@@ -381,6 +448,7 @@ function love.draw()
             "test: " .. 1,
             "testdata: " .. x,
             "testdata: " .. y,
+            "ground: " .. tostring(gamestate.onground),
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
