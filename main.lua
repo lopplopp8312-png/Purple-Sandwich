@@ -1,7 +1,7 @@
 local savetable = require("lib.tablesave")
 local floor = math.floor
 
--- goodluck to whoever reading this
+-- goodluck to whoever reading this (lazy to document everything / brain hurt)
 
 
 
@@ -33,7 +33,7 @@ function love.load()
     rvar = {}
 
     screen = {}
-    gamestate = {}
+    flags = {}
     render = {}
     dialogue = {}
 
@@ -85,13 +85,16 @@ function love.load()
             objects = {
                 -- texture name, xyz, scale xyz
                 {
-                "grass3.png", -5, -5, -2, 10, 10, 1
-                },
-                {
                 "squ.png", 0, 1, 0, 2, 1, 1
                 },
                 {
                 "grass3.png", 0, 0, -1, 1, 1, 1
+                },
+                {
+                "grass3.png", 3, 0, 1, 1, 1, 3
+                },
+                {
+                "grass3.png", -5, -5, -2, 10, 10, 1
                 },
             },
         },
@@ -109,7 +112,7 @@ end
 
 function detectground(x,y,z)
     local objects = ldata.objects
-    gamestate.onground = false
+    flags.onground = false
 
     local function detect(object)
         if object[4] - object[7] <= z - 1 and z - 1 <= object[4]
@@ -126,7 +129,7 @@ function detectground(x,y,z)
     for i = 1, #objects do
         local object = objects[i]
         if detect(object) then
-            gamestate.onground = true
+            flags.onground = true
             return object[4] + 1
         end
     end
@@ -134,7 +137,10 @@ function detectground(x,y,z)
 end
 
 function loadlevel(level)
-    levelgraphics = {}
+    levelgraphics = {
+        objects = {},
+        shadows = {},
+    }
     ldata = leveldata[level]
     local objects = ldata.objects
     local sky = ldata.sky
@@ -142,10 +148,34 @@ function loadlevel(level)
     rvar.w, rvar.h = render.sky:getDimensions()
     rvar.w, rvar.h = 1/rvar.w * 1280, 1/rvar.h * 720
 
+    -- camera z indexing
+    for i = 1, #objects do
+        local parameter = objects[i]
+        local x, y, z = parameter[2],parameter[3],parameter[4]
+
+        local cz = x + y + z
+        objects[i][8] = cz
+    end
+    -- sort z
+    local function sort(a,b)
+        return a[8] < b[8]
+    end
+
+    table.sort(objects, sort)
+
+    -- creating graphics
+    local vertex  = {
+        {0, 0, 0, 0, 0, 0, 1, 0.5},
+        {100, 0, 0, 0, 0, 0, 1, 0.5},
+        {100, 100, 0, 0, 0, 0, 1, 0.5}
+    }
+
+    shadowMesh = love.graphics.newMesh(vertex, "triangles", "static")
+
     for index = 1, #objects do
-        local stuff = objects[index]
+        local parameter = objects[index]
         local texture, x, y, z, sx, sy, sz =
-        stuff[1], stuff[2],stuff[3],stuff[4],stuff[5],stuff[6],stuff[7]
+        parameter[1], parameter[2],parameter[3],parameter[4],parameter[5],parameter[6],parameter[7]
 
         local function makeleftwall(x,y,z)
             local leftwall = love.math.newTransform()
@@ -185,7 +215,7 @@ function loadlevel(level)
             end
         end
 
-        object:setColor(0.8,0.8,0.8)
+        object:setColor(0.7,0.7,0.7)
         for i=y-1, y+sy-2 do
             for j=z, z-sz+1, -1 do
                 object:add(makeleftwall(x,-i,j))
@@ -200,12 +230,17 @@ function loadlevel(level)
             end
         end
 
-        levelgraphics[index] = object
+        -- shadow
+        local ax = x * 150 + y * -150 + 706
+        local ay = x * -150 + y * -150 + z * 150 + 309
+
+        levelgraphics.objects[index] = object
+        levelgraphics.shadows[index] = {ax,ay}
     end
 end
 
 function loaddialogue(id)
-    gamestate.dialogue = true
+    flags.dialogue = true
     dialogue.data = dialoguedata[id]
     dialogue.count = 0
     table.save(dialogue.data, "level data.lua")
@@ -213,7 +248,7 @@ function loaddialogue(id)
 end
 
 function nextdialogue(choice2)
-    gamestate.choice = false
+    flags.choice = false
     local black = {0,0,0}
     dialogue.color = {1,1,1}
     rvar.color = false
@@ -236,7 +271,7 @@ function nextdialogue(choice2)
 
     if #data == 1 then
         if guy == "return" then
-            gamestate.dialogue = false
+            flags.dialogue = false
             return
         end
 
@@ -256,7 +291,7 @@ function nextdialogue(choice2)
     dialogue.choice2 = love.graphics.newText(font, {black, data[4]})
 
     if data[4] then
-        gamestate.choice = true
+        flags.choice = true
     end
 end
 
@@ -279,7 +314,7 @@ function love.keypressed(key)
     end
 
     if keys("space") then
-        gamestate.space = true
+        flags.space = true
     end
         
 
@@ -304,8 +339,8 @@ function love.keypressed(key)
         end
     end
 
-    if gamestate.dialogue then
-        if gamestate.choice then
+    if flags.dialogue then
+        if flags.choice then
             if keys("left") then
                 nextdialogue()
             elseif keys("right") then
@@ -330,7 +365,7 @@ function love.update(dt)
     timer = timer + dt
 
     -- player
-    if love.keyboard.isDown(wasd) then
+    if love.keyboard.isDown(wasd) and not flags.dialogue then
         if wasd == "w" or wasd == "up" then
             player.vel.x = 1.5
             player.vel.y = 0
@@ -374,8 +409,8 @@ function love.update(dt)
     if ground then
         player.pos.z = ground
         player.vel.z = 0
-        if gamestate.space then
-            gamestate.space = false
+        if flags.space then
+            flags.space = false
             player.vel.z = 4.5
         end
     else
@@ -392,8 +427,11 @@ function love.draw()
     love.graphics.translate(screen.x, screen.y)
     love.graphics.translate(141,-13)
 
-    for i=1, #levelgraphics do
-        love.graphics.draw(levelgraphics[i])
+    -- objects
+    for i=1, #levelgraphics.objects do
+        love.graphics.draw(levelgraphics.objects[i])
+        local x, y = levelgraphics.shadows[i][1], levelgraphics.shadows[i][2]
+        love.graphics.draw(shadowMesh, x, y)
     end
 
     love.graphics.pop()
@@ -421,7 +459,7 @@ function love.draw()
     love.graphics.setColor(1,1,1,1)
 
     -- dialogue
-    if gamestate.dialogue then
+    if flags.dialogue then
         love.graphics.setColor(dialogue.color)
         love.graphics.draw(dialogue.box, 338, 480,0,1.5,1.5)
         love.graphics.setColor(1,1,1)
@@ -448,7 +486,7 @@ function love.draw()
             "test: " .. 1,
             "testdata: " .. x,
             "testdata: " .. y,
-            "ground: " .. tostring(gamestate.onground),
+            "ground: " .. tostring(flags.onground),
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
