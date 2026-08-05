@@ -85,10 +85,13 @@ function love.load()
             objects = {
                 -- texture name, xyz, scale xyz
                 {
-                "squ.png", 0, 1, 0, 2, 1, 1
+                "squ.png", 0, 3, 0, 2, 1, 1
                 },
                 {
                 "grass3.png", 0, 0, -1, 1, 1, 1
+                },
+                {
+                "grass3.png", 0, 4, -1, 1, 1, 1
                 },
                 {
                 "grass3.png", 3, 0, 1, 1, 1, 3
@@ -157,21 +160,17 @@ function loadlevel(level)
         objects[i][8] = cz
     end
     -- sort z
+    
     local function sort(a,b)
-        return a[8] < b[8]
+        if a[4] == b[4] then
+            return a[8] < b[8]
+        end
+        return a[4] < b[4]
     end
 
     table.sort(objects, sort)
 
     -- creating graphics
-    local vertex  = {
-        {0, 0, 0, 0, 0, 0, 1, 0.5},
-        {100, 0, 0, 0, 0, 0, 1, 0.5},
-        {100, 100, 0, 0, 0, 0, 1, 0.5}
-    }
-
-    shadowMesh = love.graphics.newMesh(vertex, "triangles", "static")
-
     for index = 1, #objects do
         local parameter = objects[index]
         local texture, x, y, z, sx, sy, sz =
@@ -231,11 +230,23 @@ function loadlevel(level)
         end
 
         -- shadow
-        local ax = x * 150 + y * -150 + 706
-        local ay = x * -150 + y * -150 + z * 150 + 309
+
+        local sz = parameter[7]
+        local height = 1
+        local vertex  = {
+            {-150, 75+150*(sz-1), 0, 0, 0, 0, 1, 0.5},
+            {150, -75+150*(sz-1), 0, 0, 0, 0, 1, 0.5},
+            {15*height+150, 150*height-75+150*(sz-1), 0, 0, 0, 0, 1, 0.5},
+            {-15+15*height, 150*(sz-1)+150*height, 0, 0, 0, 0, 1, 0.5},
+            {-165+15*height, -75+150*(sz-1)+150*height, 0, 0, 0, 0, 1, 0.5},
+        }
+
+        local shadowMesh = love.graphics.newMesh(vertex, "fan", "static")
+        local ax = x * 150 + y * -150 + 638
+        local ay = x * -75 + y * -75 + z * -150 + 433
 
         levelgraphics.objects[index] = object
-        levelgraphics.shadows[index] = {ax,ay}
+        levelgraphics.shadows[index] = {ax,ay,shadowMesh}
     end
 end
 
@@ -429,9 +440,9 @@ function love.draw()
 
     -- objects
     for i=1, #levelgraphics.objects do
+        local x, y, a = levelgraphics.shadows[i][1], levelgraphics.shadows[i][2], levelgraphics.shadows[i][3]
+        love.graphics.draw(a, x, y)
         love.graphics.draw(levelgraphics.objects[i])
-        local x, y = levelgraphics.shadows[i][1], levelgraphics.shadows[i][2]
-        love.graphics.draw(shadowMesh, x, y)
     end
 
     love.graphics.pop()
