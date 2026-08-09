@@ -36,6 +36,7 @@ function love.load()
     flags = {}
     render = {}
     dialogue = {}
+    threed = {}
 
     dialogue.box = love.graphics.newImage("asset/textbox.png")
 
@@ -77,8 +78,8 @@ function love.load()
         "testbro", {1,0,1},
         "quiz host", {1,1,0},
     }
-    
-    leveldata = {
+    -- load 3d
+    threed.leveldata = {
         GrassLands = {
             sky = "grass.png",
             -- cuboids
@@ -103,8 +104,9 @@ function love.load()
         },
     }
 
-    table.save(leveldata, "level data.lua")
+    table.save(threed.leveldata, "level data.lua")
     loadlevel("GrassLands")
+    flags.threed = true
 end
 
 function love.quit()
@@ -113,14 +115,17 @@ function love.quit()
     table.save(playerdata, "player data.lua")
 end
 
-function detectground(x,y,z)
+function detectground(x,y,z,flag,a)
     local objects = ldata.objects
-    flags.onground = false
+    if flag then
+        flags.onground = false
+    end
 
     local function detect(object)
         if object[4] - object[7] <= z - 1 and z - 1 <= object[4]
         and object[2] < x + 0.75 and x + 0.25 < object[2] + object[5]
-        and object[3] < y + 0.75 and y + 0.25 < object[3] + object[6] then
+        and object[3] < y + 0.75 and y + 0.25 < object[3] + object[6]
+        and object ~= objects[a] then
             return true
         else
             return false
@@ -132,7 +137,9 @@ function detectground(x,y,z)
     for i = 1, #objects do
         local object = objects[i]
         if detect(object) then
-            flags.onground = true
+            if flag then
+                flags.onground = true
+            end
             return object[4] + 1
         end
     end
@@ -144,31 +151,18 @@ function loadlevel(level)
         objects = {},
         shadows = {},
     }
-    ldata = leveldata[level]
+    ldata = threed.leveldata[level]
     local objects = ldata.objects
     local sky = ldata.sky
     render.sky = love.graphics.newImage("asset/" .. sky)
     rvar.w, rvar.h = render.sky:getDimensions()
     rvar.w, rvar.h = 1/rvar.w * 1280, 1/rvar.h * 720
 
-    -- camera z indexing
-    for i = 1, #objects do
-        local parameter = objects[i]
-        local x, y, z = parameter[2],parameter[3],parameter[4]
-
-        local cz = x + y + z
-        objects[i][8] = cz
-    end
-    -- sort z
-    
+    -- prepare by sort object by z
     local function sort(a,b)
-        if a[4] == b[4] then
-            return a[8] < b[8]
-        end
         return a[4] < b[4]
     end
-
-    table.sort(objects, sort)
+    table.sort(objects,sort)
 
     -- creating graphics
     for index = 1, #objects do
@@ -205,49 +199,52 @@ function loadlevel(level)
         return rhombus
         end
 
-        texture = love.graphics.newImage("asset/" .. texture)
-        local object = love.graphics.newSpriteBatch(texture, 100)
-
-        for i=x, x+sx-1 do
-            for j=y, y+sy-1 do
-                object:add(makerhombus(-i,-j,z))
-            end
+        local function drawcube(x,y,z,texture)
+            texture = love.graphics.newImage("asset/" .. texture)
+            local object = love.graphics.newSpriteBatch(texture, 100)
+            object:setColor(0.7,0.7,0.7)
+            object:add(makeleftwall(x,-y+1,z))
+            object:setColor(0.4,0.4,0.4)
+            object:add(makerightwall(-x,y,-z))
+            object:setColor(1,1,1)
+            object:add(makerhombus(-x,-y,z))
+            local h = #levelgraphics.objects + 1
+            local cz = x + y - z
+            levelgraphics.objects[h] = {object,cz}
         end
 
-        object:setColor(0.7,0.7,0.7)
-        for i=y-1, y+sy-2 do
-            for j=z, z-sz+1, -1 do
-                object:add(makeleftwall(x,-i,j))
-            end
-        end
-    
-
-        object:setColor(0.4,0.4,0.4)
-        for i=x, x+sx-1 do
-            for j=-z, sz-z-1 do
-                object:add(makerightwall(-i,y,j))
+        for x = x, x+sx-1 do
+            for y = y, y+sy-1 do
+                for z = z, z-sz+1, -1 do
+                    drawcube(x,y,z,texture)
+                end
             end
         end
 
         -- shadow
-
+        local height = 20
         local sz = parameter[7]
-        local height = 1
+        local ax = x * 150 + y * -150 + 638
+        local ay = x * -75 + y * -75 + z * -150 + 433
         local vertex  = {
-            {-150, 75+150*(sz-1), 0, 0, 0, 0, 1, 0.5},
-            {150, -75+150*(sz-1), 0, 0, 0, 0, 1, 0.5},
-            {15*height+150, 150*height-75+150*(sz-1), 0, 0, 0, 0, 1, 0.5},
-            {-15+15*height, 150*(sz-1)+150*height, 0, 0, 0, 0, 1, 0.5},
-            {-165+15*height, -75+150*(sz-1)+150*height, 0, 0, 0, 0, 1, 0.5},
+            {ax-150, ay+75, 0, 0, 0, 0, 1, 0.5},
+            {ax+150, ay-75, 0, 0, 0, 0, 1, 0.5},
+            {ax+150, ay+150*height-75, 0, 0, 0, 0, 1, 0.5},
+            {ax-15, ay+150*height, 0, 0, 0, 0, 1, 0.5},
+            {ax-165, ay-75+150*height, 0, 0, 0, 0, 1, 0.5},
         }
 
         local shadowMesh = love.graphics.newMesh(vertex, "fan", "static")
-        local ax = x * 150 + y * -150 + 638
-        local ay = x * -75 + y * -75 + z * -150 + 433
+        local h = #levelgraphics.objects + 1
+        local cz = x + y - (z-sz) + 0.1
 
-        levelgraphics.objects[index] = object
-        levelgraphics.shadows[index] = {ax,ay,shadowMesh}
+        levelgraphics.objects[h] = {shadowMesh,cz}
     end
+    -- sort object by cz
+    local function sort(a,b)
+        return a[2] > b[2]
+    end
+    table.sort(levelgraphics.objects,sort)
 end
 
 function loaddialogue(id)
@@ -371,11 +368,7 @@ function love.resize(w, h)
     aspecttruthness = math.abs(aspecty - aspectx) > 0.05
 end
 
-function love.update(dt)
-    fps = math.floor(1 / dt)
-    timer = timer + dt
-
-    -- player
+function threedupdate(dt)
     if love.keyboard.isDown(wasd) and not flags.dialogue then
         if wasd == "w" or wasd == "up" then
             player.vel.x = 1.5
@@ -402,21 +395,8 @@ function love.update(dt)
     screen.x = player.pos.x * -150 + player.pos.y * 150
     screen.y = player.pos.x * 75 + player.pos.y * 75 + player.pos.z * 150
 
-    -- dialogue
-    if dialogue.textupdate then
-        dialogue.shown = dialogue.shown + 60 * dt
-        local text = dialogue.texttext
-        text = text:sub(1, floor(dialogue.shown))
-        
-        if floor(dialogue.shown) > #text then
-            dialogue.textupdate = false
-        else
-            dialogue.text:set({{0,0,0}, text})
-        end
-    end
-
     -- floor
-    local ground = detectground(player.pos.x,player.pos.y,player.pos.z)
+    local ground = detectground(player.pos.x,player.pos.y,player.pos.z,true)
     if ground then
         player.pos.z = ground
         player.vel.z = 0
@@ -429,7 +409,7 @@ function love.update(dt)
     end
 end
 
-function love.draw()
+function threeddraw()
     -- world stuff here
     love.graphics.push()
 
@@ -440,9 +420,8 @@ function love.draw()
 
     -- objects
     for i=1, #levelgraphics.objects do
-        local x, y, a = levelgraphics.shadows[i][1], levelgraphics.shadows[i][2], levelgraphics.shadows[i][3]
-        love.graphics.draw(a, x, y)
-        love.graphics.draw(levelgraphics.objects[i])
+        local x = levelgraphics.objects[i][1]
+        love.graphics.draw(x)
     end
 
     love.graphics.pop()
@@ -456,6 +435,35 @@ function love.draw()
     love.graphics.draw(myguy,706,309)
 
     love.graphics.pop()
+end
+
+function love.update(dt)
+    fps = math.floor(1 / dt)
+    timer = timer + dt
+
+    -- 3d update
+    if flags.threed then
+        threedupdate(dt)
+    end
+
+    -- dialogue
+    if dialogue.textupdate then
+        dialogue.shown = dialogue.shown + 60 * dt
+        local text = dialogue.texttext
+        text = text:sub(1, floor(dialogue.shown))
+        
+        if floor(dialogue.shown) > #text then
+            dialogue.textupdate = false
+        else
+            dialogue.text:set({{0,0,0}, text})
+        end
+    end
+end
+
+function love.draw()
+    if flags.threed then   
+        threeddraw()
+    end
 
     -- UI/background stuff here
     love.graphics.push()
@@ -498,6 +506,7 @@ function love.draw()
             "testdata: " .. x,
             "testdata: " .. y,
             "ground: " .. tostring(flags.onground),
+            "objectcount: " .. #levelgraphics.objects,
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
