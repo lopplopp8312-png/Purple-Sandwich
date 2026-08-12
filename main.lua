@@ -1,5 +1,4 @@
 local savetable = require("lib.tablesave")
-local floor = math.floor
 
 -- goodluck to whoever reading this (lazy to document everything / brain hurt)
 
@@ -16,43 +15,17 @@ function love.load()
     love.window.setTitle("Purple Error")
     font = love.graphics.newFont("asset/BuilderSans-Medium-500.ttf", 40, "normal", 20)
     placeholdermusic = love.audio.newSource("asset/Purple Sandwich.ogg", "stream")
-    myguy = love.graphics.newImage("asset/myguy.png")
     placeholdermusic:setLooping(true)
     placeholdermusic:play()
 
-    playerdata = table.load("player data.lua")
-    if not playerdata then
-        -- initialise save file
-        playerdata = {
-            timeplayed = 0,
-            timesopened = 0,
-        }
-    end
 
     -- random variable table for confusing names
-    rvar = {}
+    vars = {}
 
-    screen = {}
     flags = {}
-    render = {}
     dialogue = {}
-    threed = {}
 
     dialogue.box = love.graphics.newImage("asset/textbox.png")
-
-    -- disgusting 'temporary' data
-    player = {
-        pos = {
-            x = 0,
-            y = 0,
-            z = 0
-        },
-        vel = {
-            x = 0,
-            y = 0,
-            z = 0
-        }
-    }
 
     dialoguedata = {
         test = {
@@ -78,174 +51,42 @@ function love.load()
         "testbro", {1,0,1},
         "quiz host", {1,1,0},
     }
-    -- load 3d
-    threed.leveldata = {
-        GrassLands = {
-            sky = "grass.png",
-            -- cuboids
-            objects = {
-                -- texture name, xyz, scale xyz
-                {
-                "squ.png", 0, 3, 0, 2, 1, 1
-                },
-                {
-                "grass3.png", 0, 0, -1, 1, 1, 1
-                },
-                {
-                "grass3.png", 0, 4, -1, 1, 1, 1
-                },
-                {
-                "grass3.png", 3, 0, 1, 1, 1, 3
-                },
-                {
-                "grass3.png", -5, -5, -2, 10, 10, 1
-                },
-            },
-        },
+
+    heightmap = {
+        -- pixels
+        13, 5, 63, 53, 92, 75, 86, 80, 23, 32
     }
 
-    table.save(threed.leveldata, "level data.lua")
-    loadlevel("GrassLands")
-    flags.threed = true
+    planetvertex = {}
+    planettriangles = {}
+
+    loadheightmap()
+
 end
+
 
 function love.quit()
-    playerdata.timeplayed = playerdata.timeplayed + timer
-    playerdata.timesopened = playerdata.timesopened + 1
-    table.save(playerdata, "player data.lua")
 end
 
-function detectground(x,y,z,flag,a)
-    local objects = ldata.objects
-    if flag then
-        flags.onground = false
+
+function loadheightmap()
+    local heightmap = heightmap
+    local x,y = 0,0
+
+    for i = 1, #heightmap do
+        local height = heightmap[i]
+        local angle = (2 * math.pi * -i / #heightmap) + math.pi
+        table.insert(planetvertex,
+            height * math.sin(angle)
+        )
+        table.insert(planetvertex,
+            height * math.cos(angle)
+        )
     end
 
-    local function detect(object)
-        if object[4] - object[7] <= z - 1 and z - 1 <= object[4]
-        and object[2] < x + 0.75 and x + 0.25 < object[2] + object[5]
-        and object[3] < y + 0.75 and y + 0.25 < object[3] + object[6]
-        and object ~= objects[a] then
-            return true
-        else
-            return false
-        end
-    end
-
-    -- ground detection
-
-    for i = 1, #objects do
-        local object = objects[i]
-        if detect(object) then
-            if flag then
-                flags.onground = true
-            end
-            return object[4] + 1
-        end
-    end
-    return false
+    planettriangles = love.math.triangulate(planetvertex)
 end
 
-function loadlevel(level)
-    levelgraphics = {
-        objects = {},
-        shadows = {},
-    }
-    ldata = threed.leveldata[level]
-    local objects = ldata.objects
-    local sky = ldata.sky
-    render.sky = love.graphics.newImage("asset/" .. sky)
-    rvar.w, rvar.h = render.sky:getDimensions()
-    rvar.w, rvar.h = 1/rvar.w * 1280, 1/rvar.h * 720
-
-    -- prepare by sort object by z
-    local function sort(a,b)
-        return a[4] < b[4]
-    end
-    table.sort(objects,sort)
-
-    -- creating graphics
-    for index = 1, #objects do
-        local parameter = objects[index]
-        local texture, x, y, z, sx, sy, sz =
-        parameter[1], parameter[2],parameter[3],parameter[4],parameter[5],parameter[6],parameter[7]
-
-        local function makeleftwall(x,y,z)
-            local leftwall = love.math.newTransform()
-            leftwall:translate(35,106)
-            leftwall:shear(0,0.5)
-            leftwall:translate(y*150+280,-z*150)
-            leftwall:translate(x*150,x*-150)
-            return leftwall
-        end
-
-        local function makerightwall(x,y,z)
-            local rightwall = love.math.newTransform()
-            rightwall:translate(634,412)
-            rightwall:shear(0,-0.5)
-            rightwall:translate(-x*150-20,z*150)
-            rightwall:translate(y*-150,y*-150)
-            return rightwall
-        end
-
-        local function makerhombus(x,y,z)
-            local rhombus = love.math.newTransform()
-            rhombus:translate(640,260)
-            rhombus:scale(0.7071, 0.7071)
-            rhombus:scale(2, 1)
-            rhombus:rotate(0.7853)
-            rhombus:translate(y*150,x*150)
-            rhombus:translate(-z*150,-z*150)
-        return rhombus
-        end
-
-        local function drawcube(x,y,z,texture)
-            texture = love.graphics.newImage("asset/" .. texture)
-            local object = love.graphics.newSpriteBatch(texture, 100)
-            object:setColor(0.7,0.7,0.7)
-            object:add(makeleftwall(x,-y+1,z))
-            object:setColor(0.4,0.4,0.4)
-            object:add(makerightwall(-x,y,-z))
-            object:setColor(1,1,1)
-            object:add(makerhombus(-x,-y,z))
-            local h = #levelgraphics.objects + 1
-            local cz = x + y - z
-            levelgraphics.objects[h] = {object,cz}
-        end
-
-        for x = x, x+sx-1 do
-            for y = y, y+sy-1 do
-                for z = z, z-sz+1, -1 do
-                    drawcube(x,y,z,texture)
-                end
-            end
-        end
-
-        -- shadow
-        local height = 20
-        local sz = parameter[7]
-        local ax = x * 150 + y * -150 + 638
-        local ay = x * -75 + y * -75 + z * -150 + 433
-        local vertex  = {
-            {ax-150, ay+75, 0, 0, 0, 0, 1, 0.5},
-            {ax+150, ay-75, 0, 0, 0, 0, 1, 0.5},
-            {ax+150, ay+150*height-75, 0, 0, 0, 0, 1, 0.5},
-            {ax-15, ay+150*height, 0, 0, 0, 0, 1, 0.5},
-            {ax-165, ay-75+150*height, 0, 0, 0, 0, 1, 0.5},
-        }
-
-        local shadowMesh = love.graphics.newMesh(vertex, "fan", "static")
-        local h = #levelgraphics.objects + 1
-        local cz = x + y - (z-sz) + 0.1
-
-        levelgraphics.objects[h] = {shadowMesh,cz}
-    end
-    -- sort object by cz
-    local function sort(a,b)
-        return a[2] > b[2]
-    end
-    table.sort(levelgraphics.objects,sort)
-end
 
 function loaddialogue(id)
     flags.dialogue = true
@@ -255,11 +96,12 @@ function loaddialogue(id)
     nextdialogue()
 end
 
+
 function nextdialogue(choice2)
     flags.choice = false
     local black = {0,0,0}
     dialogue.color = {1,1,1}
-    rvar.color = false
+    vars.color = false
 
     if choice2 then
         dialogue.count = dialogue.count + dialogue.data[dialogue.count][5]
@@ -273,7 +115,7 @@ function nextdialogue(choice2)
     for i = 1, #dialoguecolor, 2 do
         if guy == dialoguecolor[i] then
             dialogue.color = dialoguecolor[i+1]
-            rvar.color = true
+            vars.color = true
         end
     end
 
@@ -303,6 +145,7 @@ function nextdialogue(choice2)
     end
 end
 
+
 function love.keypressed(key)
 
     local function keys(...)
@@ -315,16 +158,7 @@ function love.keypressed(key)
         end
 
         return false
-    end
-
-    if keys("w", "a", "s", "d", "up", "left", "down", "right") then
-        wasd = key
-    end
-
-    if keys("space") then
-        flags.space = true
-    end
-        
+    end     
 
     if keys("escape") then
         local isfullscreen = not love.window.getFullscreen()
@@ -368,91 +202,17 @@ function love.resize(w, h)
     aspecttruthness = math.abs(aspecty - aspectx) > 0.05
 end
 
-function threedupdate(dt)
-    if love.keyboard.isDown(wasd) and not flags.dialogue then
-        if wasd == "w" or wasd == "up" then
-            player.vel.x = 1.5
-            player.vel.y = 0
-        elseif wasd == "a" or wasd == "left" then
-            player.vel.x = 0
-            player.vel.y = 1.5
-        elseif wasd == "s" or wasd == "down" then
-            player.vel.x = -1.5
-            player.vel.y = 0
-        else
-            player.vel.x = 0
-            player.vel.y = -1.5
-        end
-    else
-        player.vel.x = 0
-        player.vel.y = 0
-    end
-
-    player.pos.x = player.pos.x + player.vel.x * dt
-    player.pos.y = player.pos.y + player.vel.y * dt
-    player.pos.z = player.pos.z + player.vel.z * dt
-
-    screen.x = player.pos.x * -150 + player.pos.y * 150
-    screen.y = player.pos.x * 75 + player.pos.y * 75 + player.pos.z * 150
-
-    -- floor
-    local ground = detectground(player.pos.x,player.pos.y,player.pos.z,true)
-    if ground then
-        player.pos.z = ground
-        player.vel.z = 0
-        if flags.space then
-            flags.space = false
-            player.vel.z = 4.5
-        end
-    else
-        player.vel.z = player.vel.z - 9 * dt
-    end
-end
-
-function threeddraw()
-    -- world stuff here
-    love.graphics.push()
-
-    love.graphics.scale(screenscale, screenscale)
-    love.graphics.scale(0.8)
-    love.graphics.translate(screen.x, screen.y)
-    love.graphics.translate(141,-13)
-
-    -- objects
-    for i=1, #levelgraphics.objects do
-        local x = levelgraphics.objects[i][1]
-        love.graphics.draw(x)
-    end
-
-    love.graphics.pop()
-
-    love.graphics.push()
-
-    love.graphics.scale(screenscale, screenscale)
-    love.graphics.scale(0.8)
-
-    -- guy
-    love.graphics.draw(myguy,706,309)
-
-    love.graphics.pop()
-end
-
 function love.update(dt)
     fps = math.floor(1 / dt)
     timer = timer + dt
-
-    -- 3d update
-    if flags.threed then
-        threedupdate(dt)
-    end
 
     -- dialogue
     if dialogue.textupdate then
         dialogue.shown = dialogue.shown + 60 * dt
         local text = dialogue.texttext
-        text = text:sub(1, floor(dialogue.shown))
+        text = text:sub(1, math.floor(dialogue.shown))
         
-        if floor(dialogue.shown) > #text then
+        if math.floor(dialogue.shown) > #text then
             dialogue.textupdate = false
         else
             dialogue.text:set({{0,0,0}, text})
@@ -461,17 +221,26 @@ function love.update(dt)
 end
 
 function love.draw()
-    if flags.threed then   
-        threeddraw()
-    end
+    love.graphics.scale(screenscale, screenscale)
+    -- game stuff
+    love.graphics.push()
+
+    love.graphics.translate(640,360)
+
+    love.graphics.push()
+
+        love.graphics.setColor(0,0.8,0)
+
+        for i, triangle in ipairs(planettriangles) do
+            love.graphics.polygon("fill", triangle)
+        end
+
+    love.graphics.pop()
+
+    love.graphics.pop()
 
     -- UI/background stuff here
     love.graphics.push()
-
-    love.graphics.scale(screenscale, screenscale)
-
-    -- draw sky
-    -- love.graphics.draw(render.sky, 0, 0, 0, rvar.w, rvar.h)
 
     love.graphics.setColor(1,1,1,0.5)
     love.graphics.print("pre-alpha stage, everything sucks and\n     everything you see will change", 280, 50, 0, 3, 3)
@@ -492,21 +261,11 @@ function love.draw()
      -- debug
     if debug then
         local x, y = love.mouse.getPosition()
-        x, y = floor(x/screenscale), floor(y/screenscale)
+        x, y = math.floor(x/screenscale), math.floor(y/screenscale)
         debugvalues = {
            "fps: " .. fps,
             "timer: " .. timer,
             "screenscale: " .. screenscale,
-            "wasd : " .. wasd,
-            "posx: " .. player.pos.x,
-            "posy: " .. player.pos.y,
-            "posz: " .. player.pos.z,
-            "test: " .. 1,
-            "test: " .. 1,
-            "testdata: " .. x,
-            "testdata: " .. y,
-            "ground: " .. tostring(flags.onground),
-            "objectcount: " .. #levelgraphics.objects,
         }
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
