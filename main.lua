@@ -24,6 +24,7 @@ function love.load()
 
     flags = {}
     dialogue = {}
+    screen = {}
 
     dialogue.box = love.graphics.newImage("asset/textbox.png")
 
@@ -54,7 +55,7 @@ function love.load()
 
     heightmap = {
         -- pixels
-        13, 5, 63, 53, 92, 75, 86, 80, 23, 32
+        634,791,225,569,316,149,139,529,745,646
     }
 
     planetvertex = {}
@@ -62,6 +63,7 @@ function love.load()
 
     loadheightmap()
 
+    screen.x, screen.y = 0, 0
 end
 
 
@@ -72,15 +74,34 @@ end
 function loadheightmap()
     local heightmap = heightmap
     local x,y = 0,0
+    local smoothness = 1000
+    local smoothstep = 0.4
+    local h = #heightmap
+    local tau = 2*math.pi
 
-    for i = 1, #heightmap do
-        local height = heightmap[i]
-        local angle = (2 * math.pi * -i / #heightmap) + math.pi
+    -- idk what to name
+    local function index(x)
+        return heightmap[((x - 1) % h) + 1]
+    end
+
+    for i = 0, tau, tau/smoothness do
+        -- linear interpolation idk
+        local a = index(math.floor(((i-smoothstep)/tau)*h))
+        local b = index(math.ceil(((i-smoothstep)/tau)*h))
+        local c = index(math.floor(((i+smoothstep)/tau)*h))
+        local d = index(math.ceil(((i+smoothstep)/tau)*h))
+
+        local point1 = a + (b - a) * ((((i-smoothstep)/tau)*h) % 1)
+        local point2 = c + (d - c) * ((((i+smoothstep)/tau)*h) % 1)
+
+        local e = (point1 + point2) / 2
+
+        local angle = -i + (1/h)*tau + math.pi
         table.insert(planetvertex,
-            height * math.sin(angle)
+            e * math.sin(angle)
         )
         table.insert(planetvertex,
-            height * math.cos(angle)
+            e * math.cos(angle)
         )
     end
 
@@ -218,6 +239,21 @@ function love.update(dt)
             dialogue.text:set({{0,0,0}, text})
         end
     end
+
+
+    if love.keyboard.isDown("up") then
+        screen.y = screen.y + 1000*dt
+    end
+    if love.keyboard.isDown("down") then
+        screen.y = screen.y - 1000*dt
+    end
+    if love.keyboard.isDown("left") then
+        screen.x = screen.x + 1000*dt
+    end
+    if love.keyboard.isDown("right") then
+        screen.x = screen.x - 1000*dt
+    end
+
 end
 
 function love.draw()
@@ -226,6 +262,7 @@ function love.draw()
     love.graphics.push()
 
     love.graphics.translate(640,360)
+    love.graphics.translate(screen.x, screen.y)
 
     love.graphics.push()
 
