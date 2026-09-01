@@ -1,115 +1,105 @@
+---@diagnostic disable: lowercase-global
+---@diagnostic disable: param-type-mismatch
 local savetable = require("lib.tablesave")
+local debug = true
+local zoomlvl = -1.3
+speedalongtangent = 0
+dangle = 0
+planetx = 0
+planety = 0
+testobjects = {}
+size = 5
 
--- goodluck to whoever reading this (lazy to document everything / brain hurt)
+-- goodluck to whoever reading this
 
-
-
-function love.load()
-    debug = true
-    wasd = "w"
-    timer = 0
-    width, height = love.window.getDesktopDimensions()
-    width, height = width*0.8, height*0.8
-    screenscale = math.max(width / 1280, height/ 720)
-    love.window.setMode(width, height, {resizable = true, centered = true, highdpi = true, vsync = 0}) 
-    love.window.setTitle("Purple Error")
-    font = love.graphics.newFont("asset/BuilderSans-Medium-500.ttf", 40, "normal", 20)
-    placeholdermusic = love.audio.newSource("asset/Purple Sandwich.ogg", "stream")
-    placeholdermusic:setLooping(true)
-    placeholdermusic:play()
-
-
-    -- random variable table for confusing names
-    vars = {}
-
-    flags = {}
-    dialogue = {}
-    screen = {}
-
-    dialogue.box = love.graphics.newImage("asset/textbox.png")
-
-    dialoguedata = {
-        test = {
-            {"testguy","hi"},
-            {"testguy","helo"},
-            {"testguy","bye\nonto dialogue test2"},
-            {"test2"}
-        },
-        test2 = {
-            {"testbro","success"},
-            {"testbro","multiselection test"},
-            {"quiz host","[insert quiz here]","\n\n← cat","\n→ restart\nconversation","4"},
-            {"testbro","you chose cat"},
-            {"testbro","ok bye forever"},
-            {"return"},
-            {"quiz host","ok"},
-            {"test2"},
-        }
-    }
-    
-    dialoguecolor = {
-        "testguy", {0,1,1},
-        "testbro", {1,0,1},
-        "quiz host", {1,1,0},
-    }
-
-    heightmap = {
-        -- pixels
-        634,791,225,569,316,149,139,529,745,646
-    }
-
-    planetvertex = {}
-    planettriangles = {}
-
-    loadheightmap()
-
-    screen.x, screen.y = 0, 0
+local function dotproduct(ax, ay, bx, by)
+    return ax * bx + ay * by
 end
 
-
-function love.quit()
-end
-
-
-function loadheightmap()
+local function getgroundheight(angle)
     local heightmap = heightmap
-    local x,y = 0,0
-    local smoothness = 1000
-    local smoothstep = 0.4
-    local h = #heightmap
+    local n = #heightmap
     local tau = 2*math.pi
+    angle = angle + tau/4
 
-    -- idk what to name
     local function index(x)
-        return heightmap[((x - 1) % h) + 1]
+        return heightmap[((x) % n) + 1]
     end
 
+    local function catmullrom(p0,p1,p2,p3, t)
+        local t2 = t * t
+        local t3 = t2 * t
+        return 0.5 * (
+            2 * p1
+            + (-p0 + p2) * t
+            + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+            + (-p0 + 3 * p1 - 3 * p2 + p3) * t3
+        )
+    end
+
+    local p0 = index(math.floor(((angle/tau)*n) - 1))
+    local p1 = index(math.floor(((angle/tau)*n)))
+    local p2 = index(math.floor(((angle/tau)*n) + 1))
+    local p3 = index(math.floor(((angle/tau)*n) + 2))
+
+    local h = catmullrom(p0,p1,p2,p3, (angle/tau)*n % 1)
+
+    return h
+end
+
+local function loadheightmap()
+    local heightmap = heightmap
+    local x,y = planetx, planety
+    local smoothness = 20
+    local tau = 2*math.pi
+
     for i = 0, tau, tau/smoothness do
-        -- linear interpolation idk
-        local a = index(math.floor(((i-smoothstep)/tau)*h))
-        local b = index(math.ceil(((i-smoothstep)/tau)*h))
-        local c = index(math.floor(((i+smoothstep)/tau)*h))
-        local d = index(math.ceil(((i+smoothstep)/tau)*h))
+        local h = getgroundheight(i)
 
-        local point1 = a + (b - a) * ((((i-smoothstep)/tau)*h) % 1)
-        local point2 = c + (d - c) * ((((i+smoothstep)/tau)*h) % 1)
-
-        local e = (point1 + point2) / 2
-
-        local angle = -i + (1/h)*tau + math.pi
+        local angle = i
         table.insert(planetvertex,
-            e * math.sin(angle)
+            h * math.cos(angle) + x
         )
         table.insert(planetvertex,
-            e * math.cos(angle)
+            h * math.sin(angle) - y
         )
     end
 
     planettriangles = love.math.triangulate(planetvertex)
+
+    planetbody = love.physics.newBody(world, x, y, "static")
+
+    local planetpoints = planetvertex
+
+    table.remove(planetpoints)
+    table.remove(planetpoints)
+
+    planetshape = love.physics.newChainShape(true, planetpoints)
+    planetfixture = love.physics.newFixture(planetbody, planetshape)
+
+    --for outline
+
+    table.insert(planetvertex, planetvertex[1])
+    table.insert(planetvertex, planetvertex[2])
+    
 end
 
+local function distance(x,y)
+    return math.sqrt(x^2 + y^2)
+end
 
-function loaddialogue(id)
+local function calcG(x, y, px, py, strength, dt)
+    return (strength * dt) / (((x - px)/700)^2 + ((y - py)/700)^2)
+end
+
+local function normal(x, y, planetx, planety)
+    local x, y = x - planetx, y - planety
+    local angle = math.atan2(y, x)
+    local nx, ny = math.cos(angle), math.sin(angle)
+    return angle, nx, ny
+end
+
+local function loaddialogue(id)
     flags.dialogue = true
     dialogue.data = dialoguedata[id]
     dialogue.count = 0
@@ -118,7 +108,7 @@ function loaddialogue(id)
 end
 
 
-function nextdialogue(choice2)
+local function nextdialogue(choice2)
     flags.choice = false
     local black = {0,0,0}
     dialogue.color = {1,1,1}
@@ -164,6 +154,107 @@ function nextdialogue(choice2)
     if data[4] then
         flags.choice = true
     end
+end
+
+function love.load()
+    timer = 0
+    width, height = love.window.getDesktopDimensions()
+    width, height = width*0.8, height*0.8
+    screenscale = math.max(width / 1280, height/ 720)
+    love.window.setMode(width, height, {resizable = true, centered = true, highdpi = true, vsync = false}) 
+    love.window.setTitle("Purple Error")
+    font = love.graphics.newFont("asset/BuilderSans-Medium-500.ttf", 40, "normal", 20)
+    placeholdermusic = love.audio.newSource("asset/Purple Sandwich.ogg", "stream")
+    placeholdermusic:setLooping(true)
+    placeholdermusic:play()
+    placeholderguy = love.graphics.newImage("asset/guy.png")
+    testimage = love.graphics.newImage("asset/cat.jfif")
+
+    vars = {}
+
+    flags = {}
+    dialogue = {}
+    screen = {}
+    player = {
+        pos = {
+            x = 0,
+            y = 850,
+        },
+        vel = {
+            x = 0,
+            y = 0,
+        },
+        inp = {
+            x = 0,
+            y = 0,
+        }
+    }
+
+    dialogue.box = love.graphics.newImage("asset/textbox.png")
+
+    dialoguedata = {
+        test = {
+            {"testguy","hi"},
+            {"testguy","helo"},
+            {"testguy","bye\nonto dialogue test2"},
+            {"test2"}
+        },
+        test2 = {
+            {"testbro","success"},
+            {"testbro","multiselection test"},
+            {"quiz host","[insert quiz here]","\n\n← cat","\n→ restart\nconversation","4"},
+            {"testbro","you chose cat"},
+            {"testbro","ok bye forever"},
+            {"return"},
+            {"quiz host","ok"},
+            {"test2"},
+        }
+    }
+    
+    dialoguecolor = {
+        "testguy", {0,1,1},
+        "testbro", {1,0,1},
+        "quiz host", {1,1,0},
+    }
+
+    heightmap = {
+        -- in pixels
+        587,610,601,596,604,605,600,582,595,607,619,596,590,605,584,602,599,620,601,591,583,602,612,588,612,600,603,586,594,609,603,600,589,615,594,599
+    }
+    planetvertex = {}
+    planettriangles = {}
+
+
+
+    screen.x, screen.y = 0, 0
+
+    love.physics.setMeter(50)
+
+    world = love.physics.newWorld(0,0, true)
+
+    for i = 1, 2000 do
+        local x, y
+        repeat
+            x = math.random()*2 - 1
+            y = math.random()*2 - 1
+            local c = distance(x, y)
+        until c <= 1
+        local radius = 100
+        x, y = x*radius, y*radius
+        testobjects[i] = {}
+        testobjects[i].body = love.physics.newBody(world,x, -1200 + y, "dynamic")
+        testobjects[i].shape = love.physics.newCircleShape(size)
+        testobjects[i].fixture = love.physics.newFixture(testobjects[i].body, testobjects[i].shape)
+        testobjects[i].fixture:setRestitution(1)
+        testobjects[i].fixture:setFriction(0)
+        testobjects[i].body:setLinearVelocity(400,0)
+    end
+    
+    loadheightmap()
+end
+
+
+function love.quit()
 end
 
 
@@ -220,12 +311,41 @@ function love.resize(w, h)
     local aspectx, aspecty = w / 1280, h / 720
     screenscale = math.max(aspectx, aspecty)
 
-    aspecttruthness = math.abs(aspecty - aspectx) > 0.05
+    local aspecttruthness = math.abs(aspecty - aspectx) > 0.05
+
+    if aspecttruthness then
+        local buttons = {"OK", "Cancel"}
+        local n = love.window.showMessageBox("GAME PAUSED!!!! WINDOW IS NOT 16:9",
+            "if you wanted to fullscreen kindly press OK.\nElse please resize the window manually to 16:9.\n\ngraphics will break if it stays like this",
+            buttons, "warning")
+
+        --fullscreen
+        if n == 1 then
+            local w, h = love.window.getDesktopDimensions()
+            local aspectx, aspecty = w / 1280, h / 720
+
+            local aspecttruthness = math.abs(aspecty - aspectx) > 0.05
+            if not aspecttruthness then
+                love.window.setFullscreen(true, "desktop")
+            else
+                --fallback
+                love.window.showMessageBox("sorry","your desktop is a weird shape\nplease the window resize manually\nim doing my best ok?", "info")
+            end
+        end
+    end
 end
 
 function love.update(dt)
     fps = math.floor(1 / dt)
     timer = timer + dt
+
+    -- lag detection
+    if dt > 0.016 then
+        dt = 0.016
+        flags.slowed = true
+    else
+        flags.slowed = false
+    end
 
     -- dialogue
     if dialogue.textupdate then
@@ -253,8 +373,30 @@ function love.update(dt)
     if love.keyboard.isDown("right") then
         screen.x = screen.x - 1000*dt
     end
+    if love.keyboard.isDown("=") then
+        zoomlvl = zoomlvl + dt
+    end
+    if love.keyboard.isDown("-") then
+        zoomlvl = zoomlvl - dt
+    end
+    zoom = math.exp(zoomlvl)
 
+    --test
+    for i, n in ipairs(testobjects) do
+        local x, y = n.body:getPosition()
+        local mass = n.body:getMass()
+        local angle, nx, ny = normal(x, y, planetx, planety)
+        local bigG = calcG(x, y, planetx, planety, 400, 1)
+
+        n.body:applyForce(nx*-bigG*mass, ny*-bigG*mass)
+    end
+
+    world:update(dt)
 end
+
+
+
+
 
 function love.draw()
     love.graphics.scale(screenscale, screenscale)
@@ -262,25 +404,49 @@ function love.draw()
     love.graphics.push()
 
     love.graphics.translate(640,360)
+    love.graphics.scale(zoom,zoom)
     love.graphics.translate(screen.x, screen.y)
+    --[[if false then
+        love.graphics.rotate(angle - math.pi / 2)
+        love.graphics.translate(-player.pos.x, player.pos.y)
+    end]]
 
-    love.graphics.push()
+    --planet
+    --atmosphere
+    local atmosphere = 800
+    for i = 0, 20 do
+        love.graphics.setColor(0.3,0.6,1,0.05+i/80)
+        love.graphics.circle("fill", planetx, -planety, atmosphere-i*10)
+    end
 
-        love.graphics.setColor(0,0.8,0)
+    --terrain
+    love.graphics.setColor(0,0.8,0)
 
-        for i, triangle in ipairs(planettriangles) do
-            love.graphics.polygon("fill", triangle)
-        end
+    for i, triangle in ipairs(planettriangles) do
+        love.graphics.polygon("fill", triangle)
+    end
 
+    love.graphics.setColor(0,0.6,0)
+
+    love.graphics.setLineWidth(4)
+    love.graphics.line(planetvertex)
+
+    love.graphics.setColor(1,1,1)
+
+    love.graphics.draw(placeholderguy, player.pos.x, -player.pos.y, -dangle + math.pi/2, 0.03, 0.03, 1024, 2048)
+    for i, n in ipairs(testobjects) do
+        local x, y = n.body:getPosition()
+        love.graphics.circle("line", x, y, size)
+    end
+    
     love.graphics.pop()
 
-    love.graphics.pop()
 
     -- UI/background stuff here
     love.graphics.push()
 
     love.graphics.setColor(1,1,1,0.5)
-    love.graphics.print("pre-alpha stage, everything sucks and\n     everything you see will change", 280, 50, 0, 3, 3)
+    love.graphics.print("peepeepoopoo", 280, 50, 0, 3, 3)
     love.graphics.setColor(1,1,1,1)
 
     -- dialogue
@@ -301,23 +467,15 @@ function love.draw()
         x, y = math.floor(x/screenscale), math.floor(y/screenscale)
         debugvalues = {
            "fps: " .. fps,
-            "timer: " .. timer,
-            "screenscale: " .. screenscale,
         }
+
         for index,value in ipairs(debugvalues) do
             love.graphics.print(value, 20, index * 20)
         end
     end
 
-    if aspecttruthness then
-        love.graphics.setColor(1,0,1)
-        love.graphics.print(
-            "ASPECT RATIO IS NOT 16:9\nVISUALS WILL BREAK\npress escape for full screen\npress backspace to ignore"
-            , 50, 100, 0, 3, 3)
-        love.graphics.setColor(1,1,1)
-        if love.keyboard.isDown("backspace") then
-            aspecttruthness = false
-        end 
+    if flags.slowed then
+        love.graphics.print("lag detected. game slowed down.", 5, 700)
     end
 
     love.graphics.pop()
