@@ -1,14 +1,13 @@
 ---@diagnostic disable: lowercase-global
 ---@diagnostic disable: param-type-mismatch
-local savetable = require("lib.tablesave")
 local debug = true
-local zoomlvl = -1.3
+local zoomlvl = 1
 speedalongtangent = 0
 dangle = 0
 planetx = 0
 planety = 0
 testobjects = {}
-size = 5
+size = 3
 
 -- goodluck to whoever reading this
 
@@ -50,7 +49,7 @@ end
 local function loadheightmap()
     local heightmap = heightmap
     local x,y = planetx, planety
-    local smoothness = 20
+    local smoothness = 60
     local tau = 2*math.pi
 
     for i = 0, tau, tau/smoothness do
@@ -71,11 +70,10 @@ local function loadheightmap()
 
     local planetpoints = planetvertex
 
-    table.remove(planetpoints)
-    table.remove(planetpoints)
-
-    planetshape = love.physics.newChainShape(true, planetpoints)
+    planetshape = love.physics.newChainShape(false, planetpoints)
     planetfixture = love.physics.newFixture(planetbody, planetshape)
+    planetfixture:setFriction(0.5)
+    planetfixture:setUserData("Planet")
 
     --for outline
 
@@ -99,16 +97,18 @@ local function normal(x, y, planetx, planety)
     return angle, nx, ny
 end
 
-local function loaddialogue(id)
-    flags.dialogue = true
-    dialogue.data = dialoguedata[id]
-    dialogue.count = 0
-    table.save(dialogue.data, "level data.lua")
-    nextdialogue()
+local function applygravity(body)
+    local x, y = body:getPosition()
+    local mass = body:getMass()
+    local angle, nx, ny = normal(x, y, planetx, planety)
+    local bigG = calcG(x, y, planetx, planety, 400, 1)
+
+    body:applyForce(nx*-bigG*mass, ny*-bigG*mass)
 end
 
+local nextdialogue, loaddialogue
 
-local function nextdialogue(choice2)
+function nextdialogue(choice2)
     flags.choice = false
     local black = {0,0,0}
     dialogue.color = {1,1,1}
@@ -156,6 +156,16 @@ local function nextdialogue(choice2)
     end
 end
 
+function loaddialogue(id)
+    flags.dialogue = true
+    dialogue.data = dialoguedata[id]
+    dialogue.count = 0
+    table.save(dialogue.data, "level data.lua")
+    return nextdialogue()
+end
+
+local beginContact, endContact, preSolve, postSolve
+
 function love.load()
     timer = 0
     width, height = love.window.getDesktopDimensions()
@@ -176,18 +186,9 @@ function love.load()
     dialogue = {}
     screen = {}
     player = {
-        pos = {
-            x = 0,
-            y = 850,
-        },
-        vel = {
-            x = 0,
-            y = 0,
-        },
-        inp = {
-            x = 0,
-            y = 0,
-        }
+        size = 30,
+        dir = 0,
+        ground = false,
     }
 
     dialogue.box = love.graphics.newImage("asset/textbox.png")
@@ -219,7 +220,8 @@ function love.load()
 
     heightmap = {
         -- in pixels
-        587,610,601,596,604,605,600,582,595,607,619,596,590,605,584,602,599,620,601,591,583,602,612,588,612,600,603,586,594,609,603,600,589,615,594,599
+        --587,610,601,596,604,605,600,582,595,607,619,596,590,605,584,602,599,620,601,591,583,602,612,588,612,600,603,586,594,609,603,600,589,615,594,599
+        600,600,600,600,600,600,600,600,600,600,600,600,600,600,1000,600,600,600,600,600
     }
     planetvertex = {}
     planettriangles = {}
@@ -228,9 +230,12 @@ function love.load()
 
     screen.x, screen.y = 0, 0
 
+    --physics
+
     love.physics.setMeter(50)
 
     world = love.physics.newWorld(0,0, true)
+    world:setCallbacks(beginContact, endContact, preSolve, postSolve)
 
     for i = 1, 2000 do
         local x, y
@@ -239,18 +244,25 @@ function love.load()
             y = math.random()*2 - 1
             local c = distance(x, y)
         until c <= 1
-        local radius = 100
+        local radius = 200
         x, y = x*radius, y*radius
         testobjects[i] = {}
-        testobjects[i].body = love.physics.newBody(world,x, -1200 + y, "dynamic")
+        testobjects[i].body = love.physics.newBody(world,x, -1000 + y, "dynamic")
         testobjects[i].shape = love.physics.newCircleShape(size)
         testobjects[i].fixture = love.physics.newFixture(testobjects[i].body, testobjects[i].shape)
         testobjects[i].fixture:setRestitution(1)
         testobjects[i].fixture:setFriction(0)
-        testobjects[i].body:setLinearVelocity(400,0)
+        testobjects[i].body:setLinearVelocity(0,-400)
     end
     
     loadheightmap()
+
+    -- player
+    player.body = love.physics.newBody(world, 0, -700, "dynamic")
+    player.shape = love.physics.newCircleShape(player.size)
+    player.fixture = love.physics.newFixture(player.body, player.shape, 0.5)
+    player.fixture:setFriction(10)
+    player.fixture:setUserData("Player")
 end
 
 
@@ -335,6 +347,44 @@ function love.resize(w, h)
     end
 end
 
+function beginContact(a, b, coll)
+    local dataA = a:getUserData()
+    local dataB = b:getUserData()
+
+    local function contact(a, b)
+        if (dataA == b and dataB == a) or (dataA == a and dataB == b) then
+            return true
+        end
+        return false
+    end
+
+    if contact("Player", "Planet") then
+        player.ground = true
+    end
+end
+
+function endContact(a, b, coll)
+    local dataA = a:getUserData()
+    local dataB = b:getUserData()
+
+    local function contact(a, b)
+        if (dataA == b and dataB == a) or (dataA == a and dataB == b) then
+            return true
+        end
+        return false
+    end
+
+    if contact("Player", "Planet") then
+        player.ground = false
+    end
+end
+
+function preSolve(a, b, coll)
+end
+
+function postSolve(a, b, coll, normalimpulse, tangentimpulse)
+end
+
 function love.update(dt)
     fps = math.floor(1 / dt)
     timer = timer + dt
@@ -381,15 +431,26 @@ function love.update(dt)
     end
     zoom = math.exp(zoomlvl)
 
+    local a, d = love.keyboard.isDown("a"), love.keyboard.isDown("d")
+
+    if d then
+        player.dir = 10
+    end
+    if a then
+        player.dir = -10
+    end
+    if (a and d) or not (a or d) then
+        player.dir = 0
+    end
+
+    player.body:setAngularVelocity(player.dir)
+
     --test
     for i, n in ipairs(testobjects) do
-        local x, y = n.body:getPosition()
-        local mass = n.body:getMass()
-        local angle, nx, ny = normal(x, y, planetx, planety)
-        local bigG = calcG(x, y, planetx, planety, 400, 1)
-
-        n.body:applyForce(nx*-bigG*mass, ny*-bigG*mass)
+        applygravity(n.body)
     end
+
+    applygravity(player.body)
 
     world:update(dt)
 end
@@ -400,20 +461,24 @@ end
 
 function love.draw()
     love.graphics.scale(screenscale, screenscale)
+    local px, py = player.body:getPosition()
+    local angle
+
     -- game stuff
     love.graphics.push()
 
     love.graphics.translate(640,360)
     love.graphics.scale(zoom,zoom)
     love.graphics.translate(screen.x, screen.y)
-    --[[if false then
-        love.graphics.rotate(angle - math.pi / 2)
-        love.graphics.translate(-player.pos.x, player.pos.y)
-    end]]
+    if true then
+        angle = normal(px, py, planetx, planety) + math.pi / 2
+        love.graphics.rotate(-angle)
+        love.graphics.translate(-px, -py)
+    end
 
     --planet
     --atmosphere
-    local atmosphere = 800
+    local atmosphere = 850
     for i = 0, 20 do
         love.graphics.setColor(0.3,0.6,1,0.05+i/80)
         love.graphics.circle("fill", planetx, -planety, atmosphere-i*10)
@@ -432,12 +497,17 @@ function love.draw()
     love.graphics.line(planetvertex)
 
     love.graphics.setColor(1,1,1)
+    love.graphics.setLineWidth(1)
 
-    love.graphics.draw(placeholderguy, player.pos.x, -player.pos.y, -dangle + math.pi/2, 0.03, 0.03, 1024, 2048)
     for i, n in ipairs(testobjects) do
         local x, y = n.body:getPosition()
         love.graphics.circle("line", x, y, size)
     end
+
+    --player
+    local angle = player.body:getAngle()
+    love.graphics.circle("fill", px, py, player.size)
+    love.graphics.draw(placeholderguy, px, py, angle, 0.03, 0.03, 1024, 1024)
     
     love.graphics.pop()
 
@@ -467,6 +537,8 @@ function love.draw()
         x, y = math.floor(x/screenscale), math.floor(y/screenscale)
         debugvalues = {
            "fps: " .. fps,
+           "angluar: " .. player.body:getAngularVelocity(),
+           "ground?: " .. tostring(player.ground)
         }
 
         for index,value in ipairs(debugvalues) do
