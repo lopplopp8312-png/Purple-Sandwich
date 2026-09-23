@@ -5,4 +5,4 @@ this place is really just a backup if anything happens
 
 game completion: probably 5%
 
-mental health: 0 interest cuz incoming exam
+dont even bother helping me honestly i barely know how to code i google the syntax half the time
